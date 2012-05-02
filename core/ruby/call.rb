@@ -62,7 +62,7 @@ module Ruby
 
           #partial evaluate the left over arguments.
           self.arguments = self.arguments.pe(env)
-          return self
+          return nil
       end
     end
 

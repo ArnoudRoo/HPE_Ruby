@@ -117,9 +117,14 @@ class SClass < BaseSSObject
     @astNode
   end
 
+  def superClass
+    "< #{astNode.super_class.identifier.token}" if astNode.super_class
+  end
+
   def to_ruby(prolog=true)
     replacePlaceHolders
-    "\nclass #{identifier}\n" + @elements.map { |item| item.to_ruby(prolog) }.join + "\nend\n"
+    superClass = self.superClass if self.superClass
+    "\nclass #{identifier} #{superClass.to_s}\n" + @elements.map { |item| item.to_ruby(prolog) }.join + "\nend\n"
   end
 end
 

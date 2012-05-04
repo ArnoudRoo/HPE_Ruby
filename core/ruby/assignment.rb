@@ -23,9 +23,6 @@ module Ruby
     def pe(env)
       peRight = self.right.pe(env)
 
-      #if the assignment is done in an if branch that has no CT expression the var needs to be marked as runtime, from this point on we can't know the right value
-      env.store.setState(left.token, :runtime, false) if env.markAsRuntime
-
       #get the name of the variable or constant to set.
       varName = getNameOfVarOrConst(left)
 

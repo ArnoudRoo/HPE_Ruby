@@ -31,13 +31,12 @@ class PE
     #init the state
     env = PeEnv.new
     env.store = Store.new(nil)
-    env.markAsRuntime = false
 
     #partial evaluate the ast.
-    ast.pe(env)
+    $sharedStore.addStatements(ast.pe(env),"")
 
     #return the residual code.
-    ([$sharedStore.to_ruby] + [ast.to_ruby]).join
+    ([$sharedStore.to_ruby]).join
 
   end
 end

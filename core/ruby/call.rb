@@ -20,8 +20,11 @@ module Ruby
       [target, separator, identifier, arguments, block].compact
     end
 
+
+
+
     def pe(env)
-      #TODO: check if proc
+      #when blocks are used they are stored in the block var.
       self.block = self.block.pe(env)
 
       case identifier.token
@@ -39,6 +42,13 @@ module Ruby
           #rt is used to mark an invoke of an method as a runtime invoke (the method doesn't need to be sepcialized)
           self.arguments.elements[0].arg.prolog = self.prolog
           return self.arguments.elements[0].arg
+        when "break", "next", "redo"
+          if (env.inCTLoop)
+            env.loopControl = identifier.token
+            return
+          else
+            return self
+          end
         else
           #normal call
           #partial evaluate the target
@@ -62,7 +72,7 @@ module Ruby
 
           #partial evaluate the left over arguments.
           self.arguments = self.arguments.pe(env)
-          return nil
+          return self
       end
     end
 

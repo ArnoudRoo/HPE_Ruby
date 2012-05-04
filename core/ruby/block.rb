@@ -33,15 +33,19 @@ module Ruby
       self.expression = self.expression.pe(env)
       #if the expression isn't ct then we can't determine which part needs to be executed so return the whole if statement
       #with the expression and the branches partial evaluated. assignments to vars that are marked as ct will be changed to runtime.
-      if !self.expression.compileTime? || env.markAsRuntime #TODO check if nested ifs really need to be marked with mark as runtime
+      if !self.expression.compileTime?
+
+        oldLoopControl = env.loopControl
 
         orgEnv = env.deep_copy
 
         #pe the if block
         self.elements = self.elements.pe(env)
 
+        raise "A break or next is found in a runtime if while the containing loop is compile time. At line #{self.row+1}" if(env.inCTLoop && oldLoopControl != env.loopControl)
+
         #if there is an else block
-        if self.blocks[0]
+        if (self.respond_to? :blocks) && self.blocks[0]
           elseEnv = orgEnv.deep_copy
           self.blocks[0] = self.blocks[0].pe(elseEnv)
           #if an else block is present the if and else store need to be the same
@@ -92,12 +96,20 @@ module Ruby
         result = Ruby::Node::Composite::Array.new
 
         for elem in rubyRange.value
-          forStore = env.store
+          ctLoopEnv = env.changeInCTLoop(true)
           ripperElem = convertRubyToRipperObject(elem)
           loopVar = StoreVar.new(variable.token, ripperElem, :compileTime)
-          forStore.update(loopVar)
+          ctLoopEnv.store.update(loopVar)
           clonedElements = self.elements.deep_copy
-          result += clonedElements.pe(env.changeStore(forStore))
+          result += clonedElements.pe(ctLoopEnv)
+          case ctLoopEnv.loopControl
+            when "break"
+              break
+            when "next"
+              next
+            when "redo"
+              redo
+          end
         end
         return result
       else
@@ -113,7 +125,17 @@ module Ruby
         #if compile time the loop can be unfolded
         result = Ruby::Node::Composite::Array.new
         while (@expression.deep_copy.pe(env).evaluate.value && !inverted) || (!@expression.deep_copy.pe(env).evaluate.value && inverted)
-          result += @elements.deep_copy.pe(env)
+          ctLoopEnv = env.changeInCTLoop(true)
+          result += @elements.deep_copy.pe(ctLoopEnv)
+          case ctLoopEnv.loopControl
+            when "break"
+              break
+            when "next"
+              next
+            when "redo"
+              redo
+          end
+
         end
         return result
       else

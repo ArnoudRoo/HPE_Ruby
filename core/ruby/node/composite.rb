@@ -82,7 +82,17 @@ module Ruby
 
       def pe(env)
         #pe all the nodes
-        self.map! { |node| (node.respond_to? :pe) ? node.pe(env) : node }
+        self.map! { |node|
+          if (node.respond_to? :pe)
+            if(env.loopControl && env.inCTLoop)
+              nil
+            else
+              node.pe(env)
+            end
+          else
+            node
+          end
+        }
 
         #remove the assignments where the left side is compile time
         self.map! { |node| (node.class == Ruby::Assignment && node.ctAssignment?(env.store)) ? nil : node }

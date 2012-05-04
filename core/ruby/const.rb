@@ -1,9 +1,12 @@
 require_relative '../ruby/aggregate'
 
 module Ruby
+  class PlaceHolder < Ruby::Token
+  end
+
   class Const < DelimitedAggregate
     child_accessor :identifier, :namespace
-    
+
     def initialize(token = nil, position = nil, prolog = nil, ldelim = nil)
       self.identifier = Ruby::Identifier.new(token, position, prolog)
       super(ldelim)
@@ -12,16 +15,16 @@ module Ruby
     def compileTime?
       false
     end
-    
+
     def position(*)
       super
     end
-    
+
     def nodes
       [namespace, ldelim, identifier].compact
     end
   end
-  
+
   class Module < DelimitedAggregate
     child_accessor :const, :body
 
@@ -37,8 +40,9 @@ module Ruby
 
     def pe(env)
       $sharedStore.addModule(self)
-      self.body.pe(env)
-      return nil
+      path = self.getPath
+      $sharedStore.addStatements(self.body.pe(env),path)
+      return Ruby::PlaceHolder.new(self.const.identifier.token)
     end
 
   end
@@ -59,8 +63,9 @@ module Ruby
 
     def pe(env)
       $sharedStore.addClass(self)
-      self.body.pe(env)
-      return nil
+      path = self.getPath
+      $sharedStore.addStatements(self.body.pe(env),path)
+      return Ruby::PlaceHolder.new(self.identifier.identifier.token)
     end
   end
 end

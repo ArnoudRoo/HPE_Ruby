@@ -12,16 +12,16 @@ class BaseSSObject
       body = @elements.select { |elem| elem.class == Ruby::Program }[0]
       # loop through all the elements and replace the placeholders with the real methods, classes and modules.
       body.elements.map! { |node|
-        replacePlaceHolderIfNeeded(node,ssElements)
+        replacePlaceHolderIfNeeded(node, ssElements)
       }
       @elements = [body]
     else
       # if the class is something else as SharedStore, for example SModule, SClass then select all the Ruby::Node::Composite::Array elements and replace the placeholders within the sub arrays
       body = @elements.select { |elem| elem.class == Ruby::Node::Composite::Array }
       # loop through all the elements and replace the placeholders with the real methods, classes and modules.
-      body.each{|arrayNode| arrayNode.select{|a| a.class == Ruby::Statements}.each{|b|b.elements.map!{ |node|
+      body.each { |arrayNode| arrayNode.select { |a| a.class == Ruby::Statements }.each { |b| b.elements.map! { |node|
         replacePlaceHolderIfNeeded(node, ssElements)
-      }}}
+      } } }
       @elements = body
     end
   end
@@ -29,8 +29,8 @@ class BaseSSObject
   #this function is used by replacePlaceHolders to replace a placeholder with the real method, module or class. Used multiple times.
   def replacePlaceHolderIfNeeded(node, ssElement)
     if (node.class == Ruby::PlaceHolder)
-      replaceValue =  ssElement.select { |element| element.identifier == node.token }[0]
-       ssElement.delete(replaceValue)
+      replaceValue = ssElement.select { |element| element.identifier == node.token }[0]
+      ssElement.delete(replaceValue)
       replaceValue
     else
       node
@@ -52,6 +52,11 @@ class BaseSSObject
         raise "Error adding object to the shared store, wrong path (#{path.to_s})"
       end
     end
+  end
+
+  #ToDo: add logic to get the right class. Combine multiple classes if they exist.
+  def createObject(path)
+    return @elements.select{|i| i.class == SClass}[0].createObject
   end
 
   #specialize all the methods with the specified unspecializedName. The real specialization is implemented in the SMethod class.
@@ -80,12 +85,20 @@ class SModule < BaseSSObject
 
   def to_ruby(prolog=true)
     replacePlaceHolders
-    "\nmodule #{identifier}\n" + (@elements.map { |item| item.to_ruby(true) + "\n" }).join + "\nend\n"
+    "\nmodule #{identifier}\n" + (@elements.map { |item| item.to_ruby(prolog) + "\n" }).join + "\nend\n"
   end
 end
 
 
 class SClass < BaseSSObject
+
+  #TODO: extend to let it work.
+  def createObject
+    eval(self.to_ruby)
+    a = A.new
+    a.foo(3)
+    a
+  end
 
   def initialize(astNode)
     super()
@@ -106,7 +119,7 @@ class SClass < BaseSSObject
 
   def to_ruby(prolog=true)
     replacePlaceHolders
-    "\nclass #{identifier}\n" + @elements.map { |item| item.to_ruby(true) }.join + "\nend\n"
+    "\nclass #{identifier}\n" + @elements.map { |item| item.to_ruby(prolog) }.join + "\nend\n"
   end
 end
 
@@ -135,11 +148,10 @@ class SMethod
     env = PeEnv.new
     env.store = orgMethodStore
 #    @astNode.nodes.map! { |node| (node.respond_to? :pe) ? node.pe(env) : node }
-    "\n" + @astNode.to_ruby + "\n" + @specialized.map { |method| method.to_ruby + "\n" }.join
+    "\n" + @astNode.to_ruby + "\n" + @specialized.map { |method| method.to_ruby(prolog) + "\n" }.join
   end
 
-
-  def specialize(newMethodName, arguments, store)
+ def specialize(newMethodName, arguments, store)
 
     #this collection contains the parameters that need to be removed because the arguments passed in for the parameters are compile time
     paramsToRemove = []

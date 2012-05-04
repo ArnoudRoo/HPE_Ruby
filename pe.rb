@@ -35,6 +35,8 @@ class PE
     #partial evaluate the ast.
     $sharedStore.addSSObject(ast.pe(env),"")
 
+    a = $sharedStore.createObject(["A"])
+
     #return the residual code.
     ([$sharedStore.to_ruby]).join
 

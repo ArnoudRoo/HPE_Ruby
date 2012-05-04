@@ -1,83 +1,60 @@
 class BaseSSObject
   attr_accessor :elements
 
-  def replaceMethodPlaceHolders
+  def initialize
+    @elements = []
+  end
+
+  def replacePlaceHolders
     ssElements = @elements.select { |elem| elem.class == SMethod || (elem.kind_of? BaseSSObject) }
     if self.class == SharedStore
+      # if the class = SharedStore this means that it is the main program.
       body = @elements.select { |elem| elem.class == Ruby::Program }[0]
+      # loop through all the elements and replace the placeholders with the real methods, classes and modules.
       body.elements.map! { |node|
-        if (node.class == Ruby::PlaceHolder)
-          ssElements.select { |element| element.identifier == node.token }[0]
-        else
-          node
-        end
+        replacePlaceHolderIfNeeded(node,ssElements)
       }
       @elements = [body]
     else
+      # if the class is something else as SharedStore, for example SModule, SClass then select all the Ruby::Node::Composite::Array elements and replace the placeholders within the sub arrays
       body = @elements.select { |elem| elem.class == Ruby::Node::Composite::Array }
+      # loop through all the elements and replace the placeholders with the real methods, classes and modules.
       body.each{|arrayNode| arrayNode.select{|a| a.class == Ruby::Statements}.each{|b|b.elements.map!{ |node|
-        if (node.class == Ruby::PlaceHolder)
-          ssElements.select { |element| element.identifier == node.token }[0]
-        else
-          node
-        end
+        replacePlaceHolderIfNeeded(node, ssElements)
       }}}
       @elements = body
     end
   end
 
-  def addModule(moduleToAdd, path = nil)
-    path = moduleToAdd.getPath if (path == nil)
-    addSSObject(SModule.new(moduleToAdd, "module"), path)
+  #this function is used by replacePlaceHolders to replace a placeholder with the real method, module or class. Used multiple times.
+  def replacePlaceHolderIfNeeded(node, ssElement)
+    if (node.class == Ruby::PlaceHolder)
+      replaceValue =  ssElement.select { |element| element.identifier == node.token }[0]
+       ssElement.delete(replaceValue)
+      replaceValue
+    else
+      node
+    end
   end
 
-  def addClass(classToAdd, path = nil)
-    path = classToAdd.getPath if (path == nil)
-    addSSObject(SClass.new(classToAdd), path)
-  end
-
+  #add an object to the shared store. Used to add methods, modules, classes and statement sections.
   def addSSObject(object, path)
-    if (path.length == 1)
+    #for classes and modules a pathlength of 1 is needed. for methods and statements 0. By classes and modules the last part of the path is the module or class itself.
+    neededPathLength =(object.class == SModule || object.class == SClass) ? 1 : 0
+
+    if (path.length == neededPathLength)
       @elements << object
     else
       match = @elements.find_all { |item| item.respond_to?(:identifier) && item.identifier == path[0] }
       if (match.any?)
         match.last.addSSObject(object, path[1..-1])
       else
-        raise "Module #{moduleToAdd.const.identifier.token} could not be found"
+        raise "Error adding object to the shared store, wrong path (#{path.to_s})"
       end
     end
   end
 
-  def addStatements(statements, path)
-    if (path.length == 0)
-      @elements << statements
-    else
-      match = @elements.find_all { |item| item.respond_to?(:identifier) && item.identifier == path[0] }
-      if (match.any?)
-        match.last.addStatements(statements, path[1..-1])
-      else
-        raise "Module #{moduleToAdd.const.identifier.token} could not be found"
-      end
-    end
-  end
-
-  def addMethod(methodToAdd, path = nil)
-    path = methodToAdd.getPath if path == nil
-
-    if (path.length == 0)
-      @elements << SMethod.new(methodToAdd)
-    else
-      matches = @elements.find_all { |item| item.respond_to?(:identifier) && item.identifier == path[0] }
-
-      if (matches.any?)
-        matches.last.addMethod(methodToAdd, path[1..-1])
-      else
-        raise "Module #{path[0]} could not be found"
-      end
-    end
-  end
-
+  #specialize all the methods with the specified unspecializedName. The real specialization is implemented in the SMethod class.
   def specializeMethod(unspecializedName, specializedName, arguments, store)
     methods = @elements.find_all { |elem| elem.class == SMethod && elem.identifier == unspecializedName }
     methods.each { |method| method.specialize(specializedName, arguments, store) }
@@ -88,10 +65,9 @@ end
 
 class SModule < BaseSSObject
 
-  def initialize(astNode, type)
-    @elements = []
+  def initialize(astNode)
+    super()
     @astNode = astNode
-    @type = type
   end
 
   def identifier
@@ -103,7 +79,7 @@ class SModule < BaseSSObject
   end
 
   def to_ruby(prolog=true)
-    replaceMethodPlaceHolders
+    replacePlaceHolders
     "\nmodule #{identifier}\n" + (@elements.map { |item| item.to_ruby(true) + "\n" }).join + "\nend\n"
   end
 end
@@ -112,8 +88,8 @@ end
 class SClass < BaseSSObject
 
   def initialize(astNode)
+    super()
     @astNode = astNode
-    @elements = []
   end
 
   def identifier
@@ -129,7 +105,7 @@ class SClass < BaseSSObject
   end
 
   def to_ruby(prolog=true)
-    replaceMethodPlaceHolders
+    replacePlaceHolders
     "\nclass #{identifier}\n" + @elements.map { |item| item.to_ruby(true) }.join + "\nend\n"
   end
 end

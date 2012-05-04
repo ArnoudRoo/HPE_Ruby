@@ -24,7 +24,8 @@ module Ruby
         self.nodes.map! { |node| (node.respond_to? :pe) ? node.pe(env.changeStore(Store.new())) : node }
         return self
       else
-        $sharedStore.addMethod(self)
+        path = self.getPath
+        $sharedStore.addSSObject(SMethod.new(self),path)
         return Ruby::PlaceHolder.new(self.identifier.token)
       end
 

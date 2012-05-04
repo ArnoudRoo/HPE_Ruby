@@ -39,9 +39,9 @@ module Ruby
     end
 
     def pe(env)
-      $sharedStore.addModule(self)
       path = self.getPath
-      $sharedStore.addStatements(self.body.pe(env),path)
+      $sharedStore.addSSObject(SModule.new(self), path)
+      $sharedStore.addSSObject(self.body.pe(env),path)
       return Ruby::PlaceHolder.new(self.const.identifier.token)
     end
 
@@ -62,9 +62,10 @@ module Ruby
     end
 
     def pe(env)
-      $sharedStore.addClass(self)
       path = self.getPath
-      $sharedStore.addStatements(self.body.pe(env),path)
+      $sharedStore.addSSObject(SClass.new(self), path)
+
+      $sharedStore.addSSObject(self.body.pe(env),path)
       return Ruby::PlaceHolder.new(self.identifier.identifier.token)
     end
   end

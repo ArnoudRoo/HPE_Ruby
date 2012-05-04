@@ -3,9 +3,8 @@ require_relative 'ss_objects'
 class SharedStore < BaseSSObject
 
   def initialize
-    @elements
+    super()
     @specializedACSS = Hash.new
-    @elements = []
   end
 
   def previousSpecialized?(acs)
@@ -16,7 +15,7 @@ class SharedStore < BaseSSObject
     if (previousSpecialized?(acs))
       return @specializedACSS[acs]
     else
-      $specializedMethodCount +=1
+      $specializedMethodCount += 1
       return "#{orgName}_spec_#{$specializedMethodCount.to_s}"
     end
   end
@@ -44,7 +43,7 @@ class SharedStore < BaseSSObject
   end
 
   def to_ruby
-    replaceMethodPlaceHolders
+    replacePlaceHolders
     elements.map { |item| item.to_ruby }
   end
 end

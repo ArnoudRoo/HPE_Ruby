@@ -33,7 +33,7 @@ class PE
     env.store = Store.new(nil)
 
     #partial evaluate the ast.
-    $sharedStore.addStatements(ast.pe(env),"")
+    $sharedStore.addSSObject(ast.pe(env),"")
 
     #return the residual code.
     ([$sharedStore.to_ruby]).join

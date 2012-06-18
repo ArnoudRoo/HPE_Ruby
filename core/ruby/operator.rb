@@ -19,8 +19,17 @@ module Ruby
 
     def pe(env)
 
-      self.operand = operand.compileTime? ? operand.evaluate : self.operand.pe(env)
-      self
+      peOperandExpResult, peOperandValueResult = @operand.pe(env)
+      @operand = peOperandExpResult
+      if (Helpers.compileTime?(peOperandValueResult))
+        #execute the unary operator. The getOperator is used to get the right operator. Ripper gives back the same operator for unary and binary operators.
+        #for example the + operator, ripper gives + for binary as well as unary. getOperator converts + to +@ for a unary operator.
+        result = @operand.sendO(Helpers.getOperator(operator.token, :unary), [], nil)
+        return CTObject.new(result), CTObject.new(result)
+      else
+        return self, :top
+      end
+
     end
   end
 
@@ -35,24 +44,44 @@ module Ruby
 
     def pe(env)
 
-      #the old prolog is used to get the right whitspace in front of the left and right hand
+      #the old prolog is used to get the right whitespace in front of the left and right hand
       oldLeftProlog = left.prolog
       oldRightProlog = right.prolog
 
       #added for +=. if the left hand is an identifier this means that it is an variable and the += operator is used.
       #the right hand is always a var if it is used (doesn't need to be looked up in the store).
-      self.left = env.store.astVal(self.left.token) if self.left.class == Ruby::Identifier
+      @left = env.store.astVal(@left.peIdentifier) if (@left.class == Ruby::Identifier)
+
+      leftExpResult, leftValueResult = @left.pe(env)
+      rightExpResult, rightValueResult = @right.pe(env)
+
+      #if left or right is ct and the other is primitive convert the primitive to a ct object.
+      if (Helpers.compileTime?(rightValueResult) || Helpers.compileTime?(leftValueResult))
+        leftValueResult = CTObject.new(leftValueResult) if Helpers.primitive?(leftValueResult)
+        rightValueResult = CTObject.new(rightValueResult) if Helpers.primitive?(rightValueResult)
+      end
 
       #if the left or right hand is compile time then evaluate the code else partial evaluate the code.
-      self.left = left.compileTime? ? left.evaluate : left.pe(env)
-      self.right = right.compileTime? ? right.evaluate : right.pe(env)
+      @left = leftExpResult
+      @right = rightExpResult
 
-      left.prolog = oldLeftProlog if left.prolog
-      right.prolog = oldRightProlog if right.prolog
+      left.prolog = oldLeftProlog if left.respond_to?(:prolog)
+      right.prolog = oldRightProlog if right.respond_to?(:prolog)
 
       #if both the left and right hand are compile time the total binary operation can be evaluated.
       #if one or both are runtime return the partial evaluated binary operation.
-      (self.right.compileTime? && self.left.compileTime?) ? evaluate : self
+      if (Helpers.compileTime?(rightValueResult) && Helpers.compileTime?(leftValueResult))
+        result = leftValueResult.sendO(@operator.token, [rightValueResult], nil)
+        #added << for arrays
+        return operator.token == "<<" ? nil : CTObject.new(result), CTObject.new(result)
+      elsif(Helpers.partialObject?(leftValueResult))
+        argList = Ruby::ArgsList.new()
+        argList << Ruby::Arg.new(@left)
+        return Ruby::Call.new(@right,Ruby::Token.new("."), self.operator,argList, nil ).pe(env)
+      else
+        return self, :top
+      end
+
     end
 
     def nodes

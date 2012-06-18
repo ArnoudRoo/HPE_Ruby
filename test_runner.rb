@@ -1,8 +1,9 @@
 require_relative 'pe'
 require_relative 'core/environment/store'
 require_relative 'core/environment/store_var'
-require_relative 'store_test'
 require 'fileutils'
+
+$debug = true
 
 def initializeDirs
   FileUtils.rm_rf("..\\output", secure: true)
@@ -15,18 +16,18 @@ def partialEvaluateFiles
   pe = PE.new()
   Dir.foreach('..\input') { |file|
     if (File.fnmatch("*.rb", file))
-
       puts "Start pe of #{file}"
+      if ($debug)
+        a = PE.new
+        a.run(nil, file)
 
-      residualCode = pe.run(nil, "..\\input\\#{file}")
-
-      #print the residual code to file.
-      File.open("..\\output\\#{file}", "w") do |f|
-        f.write residualCode
+      else
+        system ("ruby pe.rb #{file}")
       end
     end
   }
 end
+
 
 def checkPartialEvaluatedFiles
   Dir.foreach('..\ExpectedOutput') { |file|
@@ -53,7 +54,7 @@ def compareResults
       system("ruby #{org} > ..\\org.txt")
       system("ruby #{res} > ..\\res.txt")
 
-      same = FileUtils.compare_file("..\\org.txt","..\\res.txt")
+      same = FileUtils.compare_file("..\\org.txt", "..\\res.txt")
       puts "#{file} has not the same output" if !same
 
     end
@@ -64,6 +65,8 @@ end
 #run the unit tests.
 #st = StoreTest.new()
 #st.run
+
+
 
 initializeDirs
 partialEvaluateFiles

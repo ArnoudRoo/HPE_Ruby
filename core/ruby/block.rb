@@ -2,7 +2,7 @@ require_relative '../ruby/statements'
 
 module Ruby
   class Block < Statements
-    child_accessor :params
+    child_accessor :params, :orgStore
 
     def initialize(statements, params = nil, ldelim = nil, rdelim = nil)
       self.params = params
@@ -12,6 +12,7 @@ module Ruby
     def nodes
       [ldelim, params, elements, rdelim].compact
     end
+
   end
 
   class NamedBlock < Block
@@ -28,80 +29,36 @@ module Ruby
 
     #partial evaluate an if.
     #the inverted var is used for unless ifs.
-    def peIf(env, inverted)
+    #the rt var is used to be sure the if is processed as a runtime if. This is used by elsif statements.
+    def peIf(env, inverted, rt=false)
 
-      self.expression = self.expression.pe(env)
-      #if the expression isn't ct then we can't determine which part needs to be executed so return the whole if statement
-      #with the expression and the branches partial evaluated. assignments to vars that are marked as ct will be changed to runtime.
-      if !self.expression.compileTime?
+      #partial evaluate the expression. so we can check if the expression is compile time or runtime
+      peExpExpResult, peExpValueResult = @expression.pe(env)
 
-        oldLoopControl = env.loopControl
-
-        orgEnv = env.deep_copy
-
-        #pe the if block
-        self.elements = self.elements.pe(env)
-
-        raise "A break or next is found in a runtime if while the containing loop is compile time. At line #{self.row+1}" if(env.inCTLoop && oldLoopControl != env.loopControl)
-
-        #if there is an else block
-        if (self.respond_to? :blocks) && self.blocks[0]
-          elseEnv = orgEnv.deep_copy
-          self.blocks[0] = self.blocks[0].pe(elseEnv)
-          #if an else block is present the if and else store need to be the same
-          raise "There is a ct variable that is used as a rt variable in the if at line #{self.row+1}" if !env.store.eql?(elseEnv.store)
-        else
-          #if there is no else block then the org store need to be the same as the if store
-          raise "There is a ct variable that is used as a rt variable in the if at line #{self.row+1}" if !orgEnv.store.eql?(env.store)
-        end
-
-
-        return self
+      if (Helpers.compileTime?(peExpValueResult))
+        return handleCTIf(env, inverted, peExpValueResult, rt)
       else
-        #expression is ct
-        expResult = expression.evaluate
-
-        #if the expression is true and not inverted or false and inverted then remove the if and render code else remove if and the code
-        if (expResult.value && !inverted) || (!expResult.value && inverted) then
-          return elements.pe(env)
-        else
-          # check if there are nested blocks, blocks can be elsif represented als If blocks or else blocks
-          if (respond_to? :blocks)
-            if (blocks[0].class == Ruby::Else)
-              # because the condition of the if was false return the code in the else the else.
-              return blocks[0].elements.pe(env)
-            elsif (blocks[0].class == Ruby::If)
-              # check if one of the next elsifs is true.
-              return blocks[0].peIf(env, inverted)
-            end
-          else
-            #if there is no block (else or elsif) and the condition of the if wasn't true the if is removed from the residual code.
-            return nil
-          end
-        end
+        return handleRTIf(env, peExpExpResult)
       end
     end
 
     def peLoop(env)
       #try to get the range, if it is a var then check if it is in the store.
-      if (self.range.class == Ruby::Variable && env.store.isCT(range.token))
-        rubyRange = env.store.astVal(range.token)
-      elsif (range.class == Ruby::Range)
-        rubyRange = range
-      end
+
+      peRangeExpResult, peRangeValueResult = @range.pe(env)
+      @range = peRangeExpResult
 
       #check if the range is CT
-      if (rubyRange)
+      if (Helpers.compileTime?(peRangeValueResult))
 
         result = Ruby::Node::Composite::Array.new
 
-        for elem in rubyRange.value
+        for elem in peRangeValueResult.rawObject
           ctLoopEnv = env.changeInCTLoop(true)
-          ripperElem = convertRubyToRipperObject(elem)
-          loopVar = StoreVar.new(variable.token, ripperElem, :compileTime)
+          loopVar = StoreVar.new(variable.token, CTObject.new(elem), :compileTime)
           ctLoopEnv.store.update(loopVar)
           clonedElements = self.elements.deep_copy
-          result += clonedElements.pe(ctLoopEnv)
+          result += clonedElements.pe(ctLoopEnv)[0]
           case ctLoopEnv.loopControl
             when "break"
               break
@@ -111,22 +68,25 @@ module Ruby
               redo
           end
         end
-        return result
+        return result, result.last
       else
-        self.elements = self.elements.pe(env.changeMR(true))
+        orgStore = env.store.deep_copy
+        peElementsExpResult, peElementsValueResult = self.elements.pe(env)
+        raise "There is a ct variable that is used as a rt variable in the while at line #{self.row+1}" if !orgStore.eql?(env.store)
+        self.elements = peElementsExpResult
       end
-      return self
+      return self, :top
     end
 
     def peWhile(env, inverted)
       #check if the expression is compile time
-      ct = @expression.deep_copy.pe(env).compileTime?
+      ct = Helpers.compileTime?(@expression.deep_copy.pe(env)[1])
       if (ct)
         #if compile time the loop can be unfolded
         result = Ruby::Node::Composite::Array.new
-        while (@expression.deep_copy.pe(env).evaluate.value && !inverted) || (!@expression.deep_copy.pe(env).evaluate.value && inverted)
+        while (@expression.deep_copy.pe(env)[0].evaluate.value && !inverted) || (!@expression.deep_copy.pe(env)[0].evaluate.value && inverted)
           ctLoopEnv = env.changeInCTLoop(true)
-          result += @elements.deep_copy.pe(ctLoopEnv)
+          result += @elements.deep_copy.pe(ctLoopEnv)[0]
           case ctLoopEnv.loopControl
             when "break"
               break
@@ -137,19 +97,99 @@ module Ruby
           end
 
         end
-        return result
+        return result, result.last
       else
         orgStore = env.store.deep_copy
-        self.elements = @elements.pe(env)
+        @expression = @expression.pe(env)[0]
+        self.elements = @elements.pe(env)[0]
         raise "There is a ct variable that is used as a rt variable in the while at line #{self.row+1}" if !orgStore.eql?(env.store)
-        return self
+        return self, :top
       end
     end
+
+    private
+
+    def handleCTIf(env, inverted, peExpValueResult, rt = false)
+      #if the expression is true and not inverted or false and inverted then remove the if and render code else remove if and the code
+      if (peExpValueResult.rawObject && !inverted) || (!peExpValueResult.rawObject && inverted) then
+        if (rt)
+          @expression = Ruby::Statements.new()
+          @expression.elements << Ruby::True.new("true")
+          @expression.ldelim = Ruby::Token.new("(")
+          @expression.rdelim = Ruby::Token.new(")")
+          @elements = elements.pe(env)[0]
+          @blocks = nil
+          @rdelim = Ruby::Token.new("\nend")
+          return self, :top
+        else
+          return elements.pe(env)
+        end
+      else
+        # check if there are nested blocks, blocks can be elsif represented als If blocks or else blocks
+        if (respond_to?(:blocks) && blocks[0])
+          if (blocks[0].class == Ruby::Else)
+            # because the condition of the if was false return the code in the else the else.
+            if (rt)
+              blocks[0].rdelim = Ruby::Token.new("\nend")
+              return blocks[0].peIf(env,inverted,rt)
+            else
+              return blocks[0].elements.pe(env)
+            end
+          elsif (blocks[0].class == Ruby::If)
+            # check if one of the next elsifs is true.
+            return blocks[0].peIf(env, inverted, rt)
+          end
+        else
+          #if there is no block (else or elsif) and the condition of the if wasn't true the if is removed from the residual code.
+          s = nil
+          if(rt)
+            s = Ruby::Statements.new()
+            s.rdelim = Ruby::Token.new("\nend")
+          end
+          return s, :top
+        end
+      end
+    end
+
+    def handleRTIf(env, peExpExpResult)
+      #if the expression isn't ct then we can't determine which part needs to be executed so return the whole if statement
+      #with the expression and the branches partial evaluated.
+
+      #set the expression to the pe expression result
+      @expression = peExpExpResult
+
+      #remember the old loopcontrol
+      oldLoopControl = env.loopControl
+
+      #remember the original environment. This is used to partial evaluate the else branch if there is one.
+      #if there is no else branch the store of the if needs to be the same as the original environment (cloned environment).
+      #the else branches need to be partially evaluated with the same environment as the if branch.
+      clonedEnv = env.deep_copy
+
+      #pe the elements of the if block
+      @elements = @elements.pe(env)[0]
+
+      #raise an error when a break, next or redo statement is detected in the runtime if.
+      raise "A break or next is found in a runtime if while the containing loop is compile time. At line #{self.row+1}" if (env.inCTLoop && oldLoopControl != env.loopControl)
+
+      #if there is an else or elsif block
+      if (self.respond_to? :blocks) && self.blocks[0]
+        #pe the else branch with the original environment. if the block is an if then set the rt argument to true, this ensures that the if is processed as an rt if statement
+        @blocks[0] = @blocks[0].class == Ruby::If ? @blocks[0].pe(clonedEnv, true)[0] : @blocks[0].pe(clonedEnv)[0]
+      end
+      #check if the stores are consistent.
+      raise "Inconsistent store change. There is a ct variable that is used as a rt variable in the if at line #{self.row+1}" if !env.store.eql?(clonedEnv.store)
+
+      return self, :top
+    end
+
+
   end
 
 
   class ChainedBlock < NamedBlock
     child_accessor :blocks
+
 
 
     def initialize(identifier, blocks, statements, params = nil, ldelim = nil, rdelim = nil)

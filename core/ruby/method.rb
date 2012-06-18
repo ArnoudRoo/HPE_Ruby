@@ -13,6 +13,22 @@ module Ruby
       super(identifier, ldelim, rdelim)
     end
 
+    def peIdentifier
+      if @identifier.respond_to?(:token)
+        @identifier.token
+      else
+        @identifier.identifier.token
+      end
+    end
+
+    def peIdentifier=(value)
+      if (@identifier.respond_to?(:token))
+        @identifier.token = value
+      else
+        @identifier.identifier.token = value
+      end
+    end
+
     def nodes
       [ldelim, target, separator, identifier, params, block, rdelim].compact
     end
@@ -20,17 +36,17 @@ module Ruby
     def pe(env)
       #if this method is defined within another method we don't need to add it to the shared store.
       #the parent of this method will contain the code to define this method.
-      if (isChildOf(Ruby::Method))
-        self.nodes.map! { |node| (node.respond_to? :pe) ? node.pe(env.changeStore(Store.new())) : node }
-        return self
-      else
-        path = self.getPath
-        $sharedStore.addSSObject(SMethod.new(self),path)
-        return Ruby::PlaceHolder.new(self.identifier.token)
-      end
+      raise "Nested methods are not supported" if (isChildOf(Ruby::Method))
 
+      $sharedStore.addSSObject(SMethod.new(self, path), path)
+      return Ruby::PlaceHolder.new(peIdentifier), :top
+    end
+
+    alias :path :getPath
+
+    def peBody(env)
+      return block.pe(env)
     end
   end
-
-
 end
+

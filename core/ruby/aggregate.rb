@@ -50,17 +50,21 @@ module Ruby
 
   require_relative '../ruby/token'
   class Variable < Token # TODO join with DelimitedVariable
+    attr_accessor :external
+
+    def primitive?
+      false
+    end
+
     def compileTime?
       return false
     end
 
+    alias :peIdentifier :token
+    alias :peIdentifier= :token=
+
     def pe(env)
-      oldProlog = self.prolog
-      #if the token of the var is available in the store then it is replaced with the ast value of the store var.
-      result = env.store.isCT(token, false) ? env.store.astVal(token).deep_copy : self
-      #the old prolog is used to get the right whitespace in front of the var when to_ruby is invoked
-      result.prolog = oldProlog
-      return result
+      peVarOrConst(env)
     end
   end
 

@@ -1,8 +1,8 @@
 class StoreVar
   def initialize(name, astVal, state)
+    throwIfWrongState(state)
     @name = name
     @astVal = astVal
-    raise TypeError, "the type must be runtime or compileTime" if (state != :runtime && state != :compileTime)
     @state = state
     @type = nil
   end
@@ -11,29 +11,21 @@ class StoreVar
     @state == :compileTime
   end
 
-  def state=(state)
-    raise TypeError, "the type must be runtime or compileTime" if (state != :runtime && state != :compileTime)
-    @state = state
+  def isPO
+    @state == :partial
   end
 
-  def type=(type)
-    @type = type
+  def state=(state)
+    throwIfWrongState(state)
+    @state = state
   end
 
   def name
     @name
   end
 
-  def name=(name)
-    @name = name
-  end
-
   def state
     @state
-  end
-
-  def type
-    @type
   end
 
   def astVal=(astVal)
@@ -41,24 +33,29 @@ class StoreVar
   end
 
   def val
-    if self.respond_to? :to_ruby
-      eval(to_ruby)
-    else
-      eval(@astVal.to_ruby)
-    end
+    eval(@astVal.to_ruby)
   end
 
   def astVal
     @astVal
   end
 
-  def asAssignment
-    varNameToken = Ruby::Token.new(name)
-    Ruby::Assignment.new(varNameToken, astVal, Ruby::Token.new("="))
+  #the eql function is used when 2 stores are compared to each other.
+  def eql?(other)
+    if (astVal.class == CTObject)
+      data = Marshal.dump(astVal.rawObject)
+      dataOther = Marshal.dump(other.astVal.rawObject)
+      return data.eql?(dataOther)
+    elsif(astVal.class == PartialObject && self.name != Helpers.selfIdentifier)
+      #check only the compile time vars in the store of the partial object.
+      astVal.store.eql?(other.astVal.store)
+    else
+      true
+    end
   end
 
-  def eql?(other)
-    #todo change code so complex objects are also supported
-    val.eql?(other.val)
+  private
+  def throwIfWrongState(state)
+    raise TypeError, "the type must be runtime, compileTime or partial" if (state != :runtime && state != :compileTime && state != :partial && state != :external)
   end
 end

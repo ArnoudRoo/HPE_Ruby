@@ -2,72 +2,72 @@ require_relative '../ruby/token'
 
 module Ruby
   class Nil < Token
+    def primitive?
+      true
+    end
+
     def value
       nil
     end
-
-	def compileTime?
-		true
-	end
   end
-  
+
   class True < Token
+    def primitive?
+      true
+    end
+
     def value
       true
     end
+  end
 
-    def compileTime?
+  class False < Token
+    def primitive?
       true
     end
-  end
-  
-  class False < Token
+
     def value
       false
     end
-
-	def compileTime?
-		true
-	end
   end
-  
+
   class Integer < Token
+    def primitive?
+      true
+    end
+
     def value
       token.to_i
     end
-
-	def compileTime?
-		true
-	end
   end
 
   class Float < Token
+    def primitive?
+      true
+    end
+
     def value
       token.to_f
     end
-
-	def compileTime?
-		true
-	end
   end
 
   class Char < Token
+    def primitive?
+      true
+    end
+
     def value
       token[1]
     end
-
-	def compileTime?
-		true
-	end
   end
-  
+
   class Label < Token
+    def primitive?
+      true
+    end
+
     def value
       token.gsub(':').to_sym
     end
-
-	def compileTime?
-		true
-	end
   end
 end

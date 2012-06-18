@@ -29,6 +29,10 @@ module Ruby
     def method_missing(method, *args, &block)
       param.respond_to?(method) ? param.send(method, *args, &block) : super
     end
+
+    def peIdentifier
+      @param.token
+    end
   end
   
   class RescueParams < Params

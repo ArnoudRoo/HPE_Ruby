@@ -7,6 +7,14 @@ module Ruby
   class Const < DelimitedAggregate
     child_accessor :identifier, :namespace
 
+    def peIdentifier
+      @identifier.token
+    end
+
+    def peIdentifier=(value)
+      @identifier.token = value
+    end
+
     def initialize(token = nil, position = nil, prolog = nil, ldelim = nil)
       self.identifier = Ruby::Identifier.new(token, position, prolog)
       super(ldelim)
@@ -18,6 +26,16 @@ module Ruby
 
     def position(*)
       super
+    end
+
+    def pe(env)
+      peVarOrConst(env)
+    end
+
+    #loop through the call path to get the path as array. f.e. [A::B::C].new [A::B::C] makes ["A","B","C"]
+    def getCallPath
+      left = @namespace ? @namespace.getCallPath : []
+      left + [identifier.token]
     end
 
     def nodes
@@ -39,10 +57,13 @@ module Ruby
     end
 
     def pe(env)
-      path = self.getPath
       $sharedStore.addSSObject(SModule.new(self), path)
-      $sharedStore.addSSObject(self.body.pe(env),path)
-      return Ruby::PlaceHolder.new(self.const.identifier.token)
+      $sharedStore.addSSObject(self.body.pe(env)[0], path)
+      return Ruby::PlaceHolder.new(self.const.identifier.token), false
+    end
+
+    def path
+      @const.getPath
     end
 
   end
@@ -62,11 +83,14 @@ module Ruby
     end
 
     def pe(env)
-      path = self.getPath
-      $sharedStore.addSSObject(SClass.new(self), path)
+      superClass = @super_class ? @super_class.getCallPath : nil
+      $sharedStore.addSSObject(SClass.new(self, path, superClass), path)
+      $sharedStore.addSSObject(self.body.pe(env)[0], path)
+      return Ruby::PlaceHolder.new(self.identifier.identifier.token), :top
+    end
 
-      $sharedStore.addSSObject(self.body.pe(env),path)
-      return Ruby::PlaceHolder.new(self.identifier.identifier.token)
+    def path
+      identifier.getPath
     end
   end
 end

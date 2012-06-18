@@ -9,12 +9,21 @@ module Ruby
       super(identifier, [else_block], statements, nil, ldelim, rdelim)
     end
 
+    #def elements(select)
+    #  [identifier, expression, ldelim, elements, blocks, rdelim].compact if !select
+    #end
+
+    def selectElements
+      ([expression] + elements).compact if select
+    end
+
     def nodes
       [identifier, expression, ldelim, elements, blocks, rdelim].compact
     end
 
-    def pe(env)
-      peIf(env, false)
+    #the rt var is used to be sure the if is processed as a runtime if. This is used by elsif statements.
+    def pe(env, rt=false)
+      peIf(env, false, rt)
     end
   end
 

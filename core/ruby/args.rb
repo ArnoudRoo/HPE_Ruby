@@ -35,9 +35,10 @@ module Ruby
 
     def pe(env)
       oldProlog = self.arg.prolog
-      self.arg = self.arg.pe(env)
-      self.arg.prolog = oldProlog
-      self
+      peExprResult, peValueResult = self.arg.pe(env)
+      self.arg = Helpers.compileTime?(peValueResult) ? peValueResult : peExprResult
+      self.arg.prolog = oldProlog if self.arg.respond_to?(:prolog)
+      return self, peValueResult
     end
   end
 end

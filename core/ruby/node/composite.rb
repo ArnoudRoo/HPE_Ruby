@@ -17,6 +17,7 @@ module Ruby
         end
 
         def nodes
+          puts "haahaa"
           self
         end
 
@@ -38,7 +39,7 @@ module Ruby
         end
 
         def []=(ix, object)
-          object.parent = parent
+          object.parent = parent if (object)
           super
         end
 
@@ -60,7 +61,7 @@ module Ruby
                 attr_reader name
                 define_method("#{name}=") do |value|
                   value = Composite::Array.new(value) if value.is_a?(::Array)
-                  value.parent = self if value
+                  value.parent = self if (value && value.respond_to?(:parent)) #OWN && value.respond_to?(:parent))
                   instance_variable_set(:"@#{name}", value)
                   yield(value) if block_given?
                 end
@@ -81,25 +82,27 @@ module Ruby
       end
 
       def pe(env)
+        #if the last element returns a partial object his is returned.
+        peValueResult = nil
+
+        self.compact!
         #pe all the nodes
         self.map! { |node|
           if (node.respond_to? :pe)
-            if(env.loopControl && env.inCTLoop)
+            if (env.loopControl && env.inCTLoop)
               nil
             else
-              node.pe(env)
+              peExprResult, peValueResult = node.pe(env)
+              #the result of an assignment isn't needed at this point.
+              ((node.class == Ruby::Call || node.class == Ruby::Assignment) && peValueResult.class == CTObject) ? nil : peExprResult
             end
           else
             node
           end
         }
 
-        #remove the assignments where the left side is compile time
-        self.map! { |node| (node.class == Ruby::Assignment && node.ctAssignment?(env.store)) ? nil : node }
-
-        return self
+        return self, peValueResult
       end
-
 
 
     end

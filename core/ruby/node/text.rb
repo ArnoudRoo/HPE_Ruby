@@ -84,7 +84,7 @@ module Ruby
       
         protected
       
-          def init # TODO how to simplify this?
+          def init
             @string = lines[row][col, self.length]
             col = self.length - @string.length
             row = self.row + 1

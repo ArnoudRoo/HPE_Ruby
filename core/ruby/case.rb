@@ -9,7 +9,8 @@ module Ruby
       self.block = block
       super(identifier, nil, rdelim)
     end
-      
+
+
     def nodes
       [identifier, expression, block, rdelim].compact
     end
@@ -22,7 +23,8 @@ module Ruby
       self.expression = expression
       super(identifier, [block], statements, nil, ldelim)
     end
-      
+
+
     def nodes
       [identifier, expression, ldelim, elements, blocks, rdelim].compact
     end

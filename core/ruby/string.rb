@@ -22,8 +22,26 @@ module Ruby
       super
     end
 
+    def primitive?
+      self.elements.all? { |element| element.primitive? }
+    end
+
     def compileTime?
-      self.elements.all? {|element| element.compileTime?}
+      self.elements.all? { |element| element.compileTime? }
+    end
+
+    def pe(env)
+      peValueResult = Ruby::StringContent.new()
+      peValueResult.token = ""
+      #pe all the nodes
+      elements.map! { |node|
+        if (node.respond_to? :pe)
+          peExprResult, peValueResult = node.pe(env)
+          #the result of an assignment isn't needed at this point.
+          Helpers.compileTime?(peValueResult) ? peValueResult : peExprResult
+        end
+      }
+      return self, peValueResult
     end
 
     def evaluate
@@ -35,12 +53,12 @@ module Ruby
   end
 
   class StringContent < Token
-    def value
-      token
+    def primitive?
+      true
     end
 
-    def compileTime?
-      true
+    def value
+      token
     end
 
     def evaluate

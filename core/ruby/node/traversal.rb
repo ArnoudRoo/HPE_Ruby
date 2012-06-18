@@ -5,16 +5,17 @@ module Ruby
         result = []
         result << self if matches?(args.dup, &block)
 
-        children = (prolog.try(:elements).to_a || []) + nodes
+
+        children = (prolog.respond_to?(:selectElements) ? (prolog.selectElements.flatten.to_a) : (prolog.try(:elements).flatten.to_a || [])) + nodes
         if !children.nil? && !children.empty? then
-          children.flatten.compact.inject(result) do |result, node|
+          children.flatten.compact.inject(result) {|result, node|
             if node.respond_to?('select') then
               result + node.select(*args, &block)
             else
               puts "#{node.class} doesn't implement select"
               result
             end
-          end
+          }
         else
           result
         end

@@ -45,17 +45,16 @@ module Ruby
     #evaluate the ast node and its sub nodes.
     def evaluate
       evalResult = eval("#{to_ruby}")
+
+      #if the result is an string
+      if (evalResult.class == "".class)
+        return Helpers.createRipperStringFromRubyString(evalResult)
+      end
+
       #create a ripper2ruby ast node for the evaluation result.
       result = Ripper::RubyBuilder.build("#{evalResult}")
 
-      if (evalResult.class == "".class)
-        #a string is converted to a class by ripper2ruby. replace it with a string
-        stringContent = Ruby::StringContent.new
-        stringContent.token = result.elements[0].token
-        leftToken = Ruby::Token.new('"')
-        rightToken = Ruby::Token.new('"')
-        Ruby::String.new(stringContent, leftToken, rightToken)
-      elsif (result.elements.count > 0)
+      if (result.elements.count > 0)
         #the result is always a program, the first element is the result we need.
         return result.elements[0]
       else
@@ -63,10 +62,40 @@ module Ruby
         nilObject.token = "nil"
         return nilObject
       end
+
     end
 
     def pe(env)
-      return self
+      return self, false
+    end
+
+    def peVarOrConst(env)
+      oldProlog = self.prolog
+
+      #check if the var is in the store and if it is ct
+      inStore = env.store.inStore?(peIdentifier)
+      ctVar = env.store.isCT(peIdentifier, false)
+
+      if (ctVar)
+        #if the var is ct than return the ripper value (if the var is ct than it is also in the store)
+        returnExpr = env.store.astVal(peIdentifier)
+        #the old prolog is used to get the right whitespace in front of the var when to_ruby is invoked
+        returnExpr.prolog = oldProlog
+        returnValue = returnExpr
+      elsif(inStore)
+        #if it is in the store but it is abstract
+        returnExpr = self
+        returnValue = env.store.astVal(peIdentifier)
+        #if the value is a primitive type return top, else it is interpreted as a ct value
+        returnValue = :top if Helpers.primitive?(returnValue)
+        returnExpr.external = true if (returnExpr.respond_to?(:external) && env.store.state(peIdentifier) == :external)
+      elsif (!inStore)
+        #the var is not in the store. This can happen in ruby because the vars doesn't need to be declared first.
+        returnExpr = self
+        returnValue = :top
+      end
+
+      return returnExpr, returnValue
     end
 
     #this function is used to get the path of a module, class or method.
@@ -92,18 +121,6 @@ module Ruby
       else
         return self.parent.isChildOf(type) if self.parent.respond_to? :isChildOf
       end
-    end
-
-    def getNameOfVarOrConst(x)
-      if x.class == Ruby::Const
-        return x.identifier.token
-      else
-        return x.token
-      end
-    end
-
-    def convertRubyToRipperObject(rubyObject)
-      return Ripper::RubyBuilder.build("#{rubyObject}").elements[0]
     end
 
 

@@ -25,15 +25,21 @@ module Ruby
     end
 
     def pe(env)
-      #pe all the nodes
-      elements.map! { |node| (node.respond_to? :pe) ? node.pe(env) : node }
+      #if the last element returns a partial object his is returned.
+      peValueResult = nil
 
-      #remove the assignments where the left side is compile time
+      #pe all the nodes
       elements.map! { |node|
-        (node.class == Ruby::Assignment && node.ctAssignment?(env.store)) ? nil : node
+        if (node.respond_to? :pe)
+          peExprResult, peValueResult = node.pe(env)
+          #the result of an assignment isn't needed at this point.
+          ((node.class == Ruby::Call || node.class == Ruby::Assignment) && peValueResult.class == CTObject) ? nil : peExprResult
+        else
+          node
+        end
       }
 
-      return self
+      return self, peValueResult
     end
 
   end
